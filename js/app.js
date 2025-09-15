@@ -6,7 +6,8 @@ import {
 import { importGTFText } from './parser-gncpuluf.js';
 import { exportAsTxt } from './export-txt.js';
 import { exportAsPdf } from './export-pdf.js';
-import { startCamera, stopCamera } from './scanner.js';
+import { startCamera, stopCamera, setOnScan } from './scanner.js';
+
 
 // Elements
 const el = (id)=>document.getElementById(id);
