@@ -31,10 +31,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   await refreshProductCount();
   await renderLines();
 
+  // Kamera taramasından gelen kodu buraya yönlendir
+  setOnScan(handleScannedCode);
+
   // UI bağla
   el('btnStart').onclick = () => startCamera();
   el('btnStop').onclick  = () => stopCamera();
   el('btnSingle').onclick= () => startCamera({ once:true });
+
 
   el('btnClearCode').onclick = () => { codeInput.value=''; codeInput.focus(); };
   el('btnConfirmCode').onclick = () => confirmCode();
