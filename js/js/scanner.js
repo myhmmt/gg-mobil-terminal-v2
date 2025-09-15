@@ -1,5 +1,4 @@
-import { handleScannedCode } from './app.js';
-
+// js/scanner.js
 // Yalnızca arka kamera + kılavuz içinden okuma + debounce
 let mediaStream = null;
 let scanning = false;
@@ -7,6 +6,9 @@ let singleShot = false;
 let lastCode = null;
 let lastTime = 0;
 let rafId = null;
+
+let onScan = async (_code)=>{};           // dışarıdan verilecek callback
+export function setOnScan(cb){ onScan = cb; }
 
 const $video = () => document.getElementById('video');
 const $guide = () => document.getElementById('guide');
@@ -35,12 +37,10 @@ export async function startCamera({ once=false } = {}) {
     lastCode = null;
     lastTime = 0;
 
-    // BarcodeDetector varsa onu kullan
     if ('BarcodeDetector' in window) {
       const formats = ['ean_13','ean_8','upc_a','upc_e','qr_code','code_128','code_39','pdf417','data_matrix'];
       detector = new window.BarcodeDetector({ formats });
     } else {
-      // ZXing fallback
       zxingReader = new ZXing.BrowserMultiFormatReader();
     }
 
@@ -80,13 +80,12 @@ async function loop() {
           const t = Date.now();
           if (code !== lastCode || (t - lastTime) > DUP_INTERVAL) {
             lastCode = code; lastTime = t;
-            await handleScannedCode(code);
+            await onScan(code);
             if (singleShot) { stopCamera(); return; }
           }
         }
       } catch (e) { /* yut */ }
     }
-
     rafId = requestAnimationFrame(run);
   };
   rafId = requestAnimationFrame(run);
@@ -96,39 +95,32 @@ async function detectInGuide(video, guide) {
   const rect = guide.getBoundingClientRect();
   const vrect = video.getBoundingClientRect();
 
-  // Video görüntüsünden guide alanına karşılık gelen crop hesapla
   const sx = (rect.left - vrect.left) / vrect.width * video.videoWidth;
   const sy = (rect.top - vrect.top) / vrect.height * video.videoHeight;
   const sw = rect.width / vrect.width * video.videoWidth;
   const sh = rect.height / vrect.height * video.videoHeight;
 
-  // Canvas oluştur
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.floor(sw));
   canvas.height = Math.max(1, Math.floor(sh));
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
-  // BarcodeDetector
   if (detector) {
     const bitmap = await createImageBitmap(canvas);
     const codes = await detector.detect(bitmap);
     if (codes && codes.length) {
-      // En uzun/erişilebilir kodu seç
       const best = codes.find(c => /^\d+$/.test(c.rawValue)) || codes[0];
       return best.rawValue;
     }
     return null;
   }
 
-  // ZXing fallback
   if (zxingReader) {
     try {
-      const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
-      const binarizer = new ZXing.Common.HybridBinarizer(luminanceSource);
-      const bitmap = new ZXing.BinaryBitmap(binarizer);
-      const result = new ZXing.MultiFormatReader().decode(bitmap);
-      return result && result.getText ? result.getText() : null;
+      // ZXing UMD ile en sağlıklısı: video elementinden decode (crop olmadan)
+      const result = await zxingReader.decodeOnceFromVideoElement($video());
+      return result?.text || null;
     } catch(_) { return null; }
   }
 
