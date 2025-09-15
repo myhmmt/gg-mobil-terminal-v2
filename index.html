@@ -1,1 +1,163 @@
-a
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>GENÇ GROSS · Mobil Terminal</title>
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/icon-192.png" />
+  <meta name="theme-color" content="#0b0bbf" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+
+  <!-- External libs (SW önbelleğe alacak) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+
+  <!-- App modules -->
+  <script defer src="js/db.js"></script>
+  <script defer src="js/parser-gncpuluf.js"></script>
+  <script defer src="js/export-txt.js"></script>
+  <script defer src="js/export-pdf.js"></script>
+  <script defer src="js/scanner.js"></script>
+  <script defer src="js/app.js"></script>
+</head>
+<body>
+  <header class="appbar">
+    <div class="brand">
+      <img src="assets/icon-192.png" alt="logo" />
+      <div>
+        <b>GENÇ GROSS</b><span> · Mobil Terminal</span>
+      </div>
+    </div>
+    <div class="subtitle">Barkod + Adet → TXT / PDF</div>
+  </header>
+
+  <main class="container">
+
+    <!-- Kamera / Okutma -->
+    <section class="card">
+      <div class="row">
+        <div class="label">Kamera:</div>
+        <div class="value">Arka kamera (zorunlu)</div>
+        <button id="btnStart" class="btn primary">Kamerayı Başlat</button>
+        <button id="btnStop" class="btn">Durdur</button>
+        <button id="btnSingle" class="btn warn">👉 Tek Okut</button>
+      </div>
+
+      <div class="preview-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <!-- Kılavuz -->
+        <div id="guide" class="guide-rect"></div>
+      </div>
+
+      <div class="status">
+        <span id="statusBadge" class="chip ok">Hazır</span>
+        <span id="fpsBadge" class="chip">FPS: -</span>
+        <span id="productCountBadge" class="chip">0 ürün yüklü</span>
+      </div>
+    </section>
+
+    <!-- Barkod/Kod & Adet -->
+    <section class="card">
+      <h3>Barkod / Kod &amp; Adet</h3>
+
+      <div class="row gap">
+        <input id="codeInput" class="input"
+          inputmode="numeric" pattern="[0-9]*"
+          placeholder="Barkod veya (sayısal) kısa kod" />
+        <button id="btnClearCode" class="btn light">Temizle</button>
+        <button id="btnConfirmCode" class="btn warn">Tamam</button>
+      </div>
+
+      <div class="row gap">
+        <button id="btnMinus" class="btn light">-1</button>
+        <input id="qtyInput" class="input qty" inputmode="numeric" pattern="[0-9]*" value="1" />
+        <button id="btnPlus" class="btn light">+1</button>
+        <button id="btnAdd" class="btn success">Ekle</button>
+        <button id="btnUndo" class="btn light">Geri Al</button>
+      </div>
+
+      <div class="row info-line">
+        <div>Ürün: <span id="foundName" class="good">—</span> · Fiyat: <span id="foundPrice" class="price">—</span></div>
+      </div>
+
+      <div class="row gap">
+        <label class="label" for="fileName">Dosya Adı:</label>
+        <input id="fileName" class="input" placeholder="ör. sayim_01" />
+      </div>
+
+      <div class="row gap wrap">
+        <button id="btnExportTxt" class="btn primary">TXT Olarak Dışa Aktar</button>
+        <button id="btnExportPdf" class="btn warn">PDF Olarak Dışa Aktar</button>
+        <button id="btnClearList" class="btn danger">Listeyi Temizle</button>
+      </div>
+    </section>
+
+    <!-- Liste -->
+    <section class="card">
+      <h3>Eklenen Satırlar</h3>
+      <div class="table-wrap">
+        <table class="table" id="linesTable">
+          <thead>
+            <tr>
+              <th>Kod/Barkod</th>
+              <th>İsim</th>
+              <th>Adet</th>
+              <th style="width: 72px;">Sil</th>
+            </tr>
+          </thead>
+          <tbody id="linesTbody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" id="totalsCell">Toplam satır: 0 · Toplam adet: 0</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- Ürün verisi -->
+    <section class="card">
+      <h3>Ürün Verisi Yükle</h3>
+      <p class="muted">GNCPULUF / GTF / TXT (1=isim, 3=barkod, 4=fiyat). Sadece sayısal barkod & kısa kod geçerlidir.</p>
+      <div class="row gap wrap">
+        <input id="fileInput" type="file" />
+        <select id="encodingSelect" class="input">
+          <option value="windows-1254">Türkçe (Windows-1254)</option>
+          <option value="utf-8">UTF-8</option>
+        </select>
+        <button id="btnClearProducts" class="btn danger">Ürün Verisini Temizle</button>
+      </div>
+    </section>
+
+    <!-- İsimle arama -->
+    <section class="card">
+      <h3>Ürün Arama (isimle)</h3>
+      <input id="searchInput" class="input" placeholder="örn: onurlu, ekmek, kolonya..." />
+      <ul id="searchResults" class="results"></ul>
+      <p class="muted">Sonuca dokununca barkodu girişe doldurur.</p>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <small>© GENÇ GROSS · PWA · Offline</small>
+  </footer>
+
+  <script>
+    // PWA SW
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
+</body>
+</html>
